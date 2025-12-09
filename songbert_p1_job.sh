@@ -1,7 +1,7 @@
 #!/bin/bash
 
 
-#SBATCH --job-name=songbert_p1
+#SBATCH --job-name=continue_songbert_p1_compile
 #SBATCH --account=eecs595f25_class
 #SBATCH --partition=spgpu
 #SBATCH --gpus=1
@@ -29,11 +29,12 @@ python train_songbert_phase1.py \
     --train_file data/playlists.tsv \
     --lyrics_file data/final_data.tsv \
     --batch_size 16 \
-    --epochs 4 \
+    --epochs 8 \
     --max_length 256 \
     --num_context_songs 10 \
     --learning_rate 3e-5 \
-    --output_dir trained_models/songbert_p1 
+    --output_dir trained_models/songbert_p1 \
+    --resume
 
     
 echo "training script finished."

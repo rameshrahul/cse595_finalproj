@@ -6,13 +6,14 @@ from transformers import AutoModel, AutoTokenizer, Trainer, TrainingArguments
 from transformers import EvalPrediction
 import numpy as np
 from tqdm import tqdm
+import random
 
 # ============================================================================
 # DATASET
 # ============================================================================    
 
 class PlaylistDataset(Dataset):
-    def __init__(self, adjacency_list, songid_to_tokenized_lyrics, max_length=512, num_context_songs=5):
+    def __init__(self, adjacency_list, songid_to_tokenized_lyrics, max_length=512, num_context_songs=5, random_seed=42):
         """
         Args:
             adjacency_list: Dict where keys are song lyrics and values are sets of 
@@ -24,33 +25,35 @@ class PlaylistDataset(Dataset):
         self.data = []
         self.max_length = max_length
         self.songid_to_tokenized_lyrics = songid_to_tokenized_lyrics
+
+        random.seed(random_seed)
         
-        import random
         
         # Get all songs for negative sampling
         all_songs = list(adjacency_list.keys())
         
         # Create training examples
-        for target_song, related_songs in adjacency_list.items():
+        for target_song, related_songs in tqdm(adjacency_list.items()):
             if len(related_songs) == 0:
                 continue
             
             # Convert set to list for sampling
             positive_songs = list(related_songs)
-            
-            # Get negative examples (songs NOT in same playlists)
-            negative_songs = [s for s in all_songs if s not in related_songs and s != target_song]
-            
-            if len(negative_songs) == 0:
-                continue
-            
-            # Sample context songs (mix of positive and negative)
+
             num_positive = min(len(positive_songs), num_context_songs // 2)
             num_negative = num_context_songs - num_positive
             
+            # Get negative examples (songs NOT in same playlists)
+            negative_songs = []
+            while len(negative_songs) != num_negative:
+                random_song = random.choice(all_songs)
+                if random_song not in related_songs:
+                    negative_songs.append(random_song)
+            
+            
             context_songs = (
                 random.sample(positive_songs, num_positive) +
-                random.sample(negative_songs, min(len(negative_songs), num_negative))
+                negative_songs
             )
             random.shuffle(context_songs)
             

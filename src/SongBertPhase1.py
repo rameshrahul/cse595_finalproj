@@ -30,7 +30,8 @@ class SongBertModelPhase1(nn.Module):
         target_attention_mask=None,
         context_input_ids=None,
         context_attention_mask=None,
-        labels=None
+        labels=None,
+        **kwargs
     ):
 
         # ---- Target embedding ----
