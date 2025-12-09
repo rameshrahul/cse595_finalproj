@@ -49,7 +49,7 @@ def parse_args():
 # Metrics
 # ============================================================
 
-def compute_metrics(eval_pred):
+def compute_metrics(eval_pred, **kwargs):
 
     # HuggingFace returns predictions as a tuple, so extract logits
     logits = eval_pred.predictions
@@ -209,7 +209,6 @@ def main():
     # ----------------------------
     print("\nInitializing model...")
     model = SongBertModelPhase1(base_model, loss_fn=torch.nn.BCEWithLogitsLoss()).to(device)
-    #model = torch.compile(model, mode="reduce-overhead")
 
     # ----------------------------
     # Training Arguments
@@ -239,9 +238,11 @@ def main():
         bf16=torch.cuda.is_available(),     # A100 fast path
         bf16_full_eval=torch.cuda.is_available(),
         fp16=False,                         # fp16 optional
-        logging_steps=500,
-        eval_strategy="epoch",
-        save_strategy="epoch",
+        logging_steps=100,
+        eval_strategy="steps",
+        save_strategy="steps",
+        eval_steps=100,
+        save_steps=100,
         load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
         greater_is_better=False,
