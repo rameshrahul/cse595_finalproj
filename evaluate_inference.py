@@ -19,22 +19,24 @@ from safetensors.torch import load_file
 
 # Local dependencies
 from src.RandomBaselineInference import RandomBaseline
-from src.BertInference import BertBaseline
-from src.SongBertPhase1 import SongBertModelPhase1
+from src.BertInference import BertInferencer
+from src.SongBertPhase3 import SongBertModelPhase3
 
 
 # -------------------------------------------------------
 # Data Loading
 # -------------------------------------------------------
 
-def load_song_data(tsv_dir="data/song_data/"):
-    tsv_files = [f for f in os.listdir(tsv_dir) if f.endswith(".tsv")]
-    dfs = [pd.read_csv(os.path.join(tsv_dir, f), sep="\t") for f in tsv_files]
-    combined = pd.concat(dfs, ignore_index=True)
-    return combined.drop_duplicates()
+def load_song_data(tsv_path="data/chunk_data.tsv"):
+    # tsv_files = [f for f in os.listdir(tsv_dir) if f.endswith(".tsv")]
+    # dfs = [pd.read_csv(tsv_path, sep="\t")]
+    # combined = pd.concat(dfs, ignore_index=True)
+
+    df = pd.read_csv(tsv_path, sep="\t")
+    return df
 
 
-def load_playlists(path="data/playlist_data/mpd.slice.2000-2999.json"):
+def load_playlists(path="data/mpd.slice.2000-2999.json"):
     with open(path, "r") as f:
         data = json.load(f)
     return data["playlists"]
@@ -48,6 +50,10 @@ def score_playlist(generated, actual):
     """Simple overlap score: precision@k."""
     generated = {s.lower().strip() for s in generated}
     actual = {s.lower().strip() for s in actual}
+
+    print("------------------")
+    print(generated)
+    print(actual)
     hits = sum(1 for g in generated if g in actual)
     return hits / len(generated)
 
@@ -56,33 +62,33 @@ def score_playlist(generated, actual):
 # Model Loading
 # -------------------------------------------------------
 
-def load_bert_baseline(song_list, lyrics_list):
+def load_bert_baseline(song_list, lyrics_list, max_length):
     tokenizer = AutoTokenizer.from_pretrained("answerdotai/ModernBERT-base")
     model = AutoModel.from_pretrained("answerdotai/ModernBERT-base")
-    return BertBaseline(song_list, lyrics_list, tokenizer, model)
+    return BertInferencer(song_list, lyrics_list, model, tokenizer, max_length)
 
 
-def load_songbert_phase1(song_list, lyrics_list, model_dir="song_bert_output/final_model"):
+def load_songbert_phase(song_list, lyrics_list, max_length, model_dir="song_bert_output/final_model"):
     tokenizer = AutoTokenizer.from_pretrained(model_dir)
     base_bert = AutoModel.from_pretrained("answerdotai/ModernBERT-base")
 
-    phase1_model = SongBertModelPhase1(
+    phase_model = SongBertModelPhase3(
         bert_model=base_bert,
         loss_fn=torch.nn.BCEWithLogitsLoss()
     )
     state_dict = load_file(f"{model_dir}/model.safetensors")
-    phase1_model.load_state_dict(state_dict)
-    phase1_model.eval()
+    phase_model.load_state_dict(state_dict)
+    phase_model.eval()
 
-    print("Phase-1 SongBERT Loaded.")
-    return BertBaseline(song_list, lyrics_list, tokenizer, phase1_model.bert)
+    print("Phase-3 SongBERT Loaded.")
+    return BertInferencer(song_list, lyrics_list, phase_model.bert, tokenizer, max_length)
 
 
 # -------------------------------------------------------
 # Evaluation
 # -------------------------------------------------------
 
-def evaluate_models(playlists, random_model, bert_baseline, bert_phase1, sample_limit=None):
+def evaluate_models(playlists, random_model, bert_baseline, bert_phase, sample_limit=None):
     random_scores = []
     base_scores = []
     phase1_scores = []
@@ -93,10 +99,11 @@ def evaluate_models(playlists, random_model, bert_baseline, bert_phase1, sample_
         tracks = [t["track_name"] for t in playlist["tracks"]]
         k = len(tracks)
         playlist_name = playlist["name"]
-
+        print("|||||||||||||||||||||||||||||||||||||||||||")
+        print("PLAYLIST NAME:", playlist_name)
         random_scores.append(score_playlist(random_model.generate_playlist(k), tracks))
         base_scores.append(score_playlist(bert_baseline.generate_playlist(k, playlist_name), tracks))
-        phase1_scores.append(score_playlist(bert_phase1.generate_playlist(k, playlist_name), tracks))
+        phase1_scores.append(score_playlist(bert_phase.generate_playlist(k, playlist_name), tracks))
 
     return random_scores, base_scores, phase1_scores
 
@@ -126,6 +133,9 @@ def plot_results(random_scores, bert_base_scores, phase1_scores, output="baselin
 # -------------------------------------------------------
 
 def main():
+
+    max_length = 256
+
     print("Loading song data...")
     df = load_song_data()
     song_list = df["song"].tolist()
@@ -136,15 +146,17 @@ def main():
 
     print("Loading models...")
     random_model = RandomBaseline(song_list)
-    bert_baseline = load_bert_baseline(song_list, lyrics_list)
-    bert_phase1 = load_songbert_phase1(song_list, lyrics_list)
+    print("Loading bert baseline...")
+    bert_baseline = load_bert_baseline(song_list, lyrics_list, max_length)
+    print("Loading bert phase...")
+    bert_phase = load_songbert_phase(song_list, lyrics_list, max_length, model_dir="trained_models/songbert_p3/final_model")
 
     print("Evaluating...")
     random_scores, base_scores, phase1_scores = evaluate_models(
         playlists,
         random_model,
         bert_baseline,
-        bert_phase1,
+        bert_phase,
         sample_limit=1000  # match original code
     )
 
