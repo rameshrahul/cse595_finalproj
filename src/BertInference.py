@@ -6,7 +6,7 @@ from tqdm import tqdm
 from sklearn.neighbors import NearestNeighbors
 
 
-class BertBaseline:
+class BertInferencer:
 
     def batch_encode(self, lyrics_list, batch_size=64):
         vectors = []
