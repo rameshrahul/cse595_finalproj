@@ -5,7 +5,7 @@
 #SBATCH --account=eecs595f25_class
 #SBATCH --partition=spgpu
 #SBATCH --gpus=1
-#SBATCH --time=04:00:00
+#SBATCH --time=10:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --mem-per-cpu=16g
@@ -29,11 +29,11 @@ python train_songbert_phase1.py \
     --train_file data/playlists.tsv \
     --lyrics_file data/final_data.tsv \
     --batch_size 16 \
-    --epochs 8 \
+    --epochs 10 \
     --max_length 256 \
     --num_context_songs 10 \
     --learning_rate 3e-5 \
-    --output_dir trained_models/songbert_p1 \
+    --output_dir trained_models/songbert_p1_10_epochs \
     --resume
 
     

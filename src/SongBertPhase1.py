@@ -33,7 +33,10 @@ class SongBertModelPhase1(nn.Module):
         labels=None,
         **kwargs
     ):
+        device = next(self.parameters()).device
 
+        target_input_ids = target_input_ids.to(device)
+        target_attention_mask = target_attention_mask.to(device)
         # ---- Target embedding ----
         target_out = self.bert(
             input_ids=target_input_ids,

@@ -24,6 +24,8 @@ export TOKENIZERS_PARALLELISM=false
 module load python
 module load cuda
 
-python evaluate_inference.py
+python evaluate_inference.py \
+    --songbert-p1-dir trained_models/songbert_p1_10_epochs/final_model_phase1 \
+    --songbert-p3-dir trained_models/songbert_p3
 
 echo "evaluation script finished."

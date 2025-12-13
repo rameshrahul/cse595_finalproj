@@ -241,8 +241,8 @@ def main():
         logging_steps=100,
         eval_strategy="steps",
         save_strategy="steps",
-        eval_steps=100,
-        save_steps=100,
+        eval_steps=500,
+        save_steps=500,
         load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
         greater_is_better=False,
@@ -250,7 +250,8 @@ def main():
         dataloader_num_workers=1,           
         remove_unused_columns=False,
         report_to=["wandb"], 
-        disable_tqdm=False
+        disable_tqdm=False,
+        torch_compile=False
     )
 
     trainer = Trainer(
@@ -267,10 +268,6 @@ def main():
     # ----------------------------
     print("\nStarting training...")
     trainer.train(resume_from_checkpoint=args.resume)
-
-    print("\nEvaluating...")
-    results = trainer.evaluate()
-    print(results)
 
     # ----------------------------
     # Save Final Model
