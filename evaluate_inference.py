@@ -28,6 +28,8 @@ from src.BertInference import BertInferencer
 from src.SongBertPhase3 import SongBertModelPhase3
 from src.SongBertPhase1 import SongBertModelPhase1
 
+from src.Metrics import LexicalPlaylistMetrics, EmbeddingPlaylistMetrics
+
 
 # =====================================================================
 # Data Loading
@@ -85,27 +87,48 @@ def tokenize_lyrics(lyrics_list, tokenizer, max_length, batch_size=32):
 
     return all_batches
 
-# =====================================================================
-# Metrics
-# =====================================================================
+def analyze_playlist_coverage(playlists, song_list):
+    """
+    Reports how many playlist tracks are missing from the lyric corpus.
+    """
+    song_set = {s.lower().strip() for s in song_list}
 
-def precision_at_k(generated: List[str], actual: List[str]) -> float:
-    generated = {s.lower().strip() for s in generated}
-    actual = {s.lower().strip() for s in actual}
-    hits = sum(1 for g in generated if g in actual)
-    return hits / max(len(generated), 1)
+    total_tracks = 0
+    missing_tracks = 0
 
-def score_playlist_jaccard(generated, actual):
-    g = {s.lower().strip() for s in generated}
-    a = {s.lower().strip() for s in actual}
-    if not g and not a:
-        return 1.0
-    return len(g & a) / len(g | a)
+    missing_by_playlist = []
 
-METRIC_REGISTRY: Dict[str, Callable[[List[str], List[str]], float]] = {
-    "precision@k": precision_at_k,
-    "jaccard": score_playlist_jaccard
-}
+    for playlist in playlists:
+        tracks = [t["track_name"] for t in playlist["tracks"]]
+        total_tracks += len(tracks)
+
+        missing = [
+            t for t in tracks
+            if t.lower().strip() not in song_set
+        ]
+        missing_tracks += len(missing)
+
+        missing_by_playlist.append(len(missing))
+
+    print("\n=== PLAYLIST COVERAGE ANALYSIS ===")
+    print(f"Total playlist tracks: {total_tracks}")
+    print(f"Tracks missing lyrics: {missing_tracks}")
+    print(f"Coverage: {(1 - missing_tracks / max(total_tracks, 1)) * 100:.2f}%")
+
+    # Optional diagnostics
+    if missing_by_playlist:
+        avg_missing = sum(missing_by_playlist) / len(missing_by_playlist)
+        max_missing = max(missing_by_playlist)
+
+        print(f"Avg missing tracks / playlist: {avg_missing:.2f}")
+        print(f"Max missing tracks in a playlist: {max_missing}")
+
+    return {
+        "total_tracks": total_tracks,
+        "missing_tracks": missing_tracks,
+        "coverage_pct": (1 - missing_tracks / max(total_tracks, 1)) * 100,
+    }
+
 
 # =====================================================================
 # Model loading
@@ -176,14 +199,41 @@ def evaluate(
 # Visualization
 # =====================================================================
 
-def plot_results(results, output_path: str):
-    model_names = list(results.keys())
-    metric_names = list(next(iter(results.values())).keys())
+def plot_results(results, output_prefix: str, LEXICAL_METRICS, EMBEDDING_METRICS):
+    all_metrics = list(next(iter(results.values())).keys())
 
+    lexical_metrics = [m for m in all_metrics if m in LEXICAL_METRICS]
+    embedding_metrics = [m for m in all_metrics if m in EMBEDDING_METRICS]
+
+    if lexical_metrics:
+        plot_metric_group(
+            results,
+            lexical_metrics,
+            title="Playlist Generation — Lexical Metrics (Higher is Better)",
+            ylabel="Score",
+            output_path=output_prefix.replace(".png", "_lexical.png"),
+        )
+
+    if embedding_metrics:
+        plot_metric_group(
+            results,
+            embedding_metrics,
+            title="Playlist Generation — Embedding Metrics (Lower is Better)",
+            ylabel="Distance",
+            output_path=output_prefix.replace(".png", "_embedding.png"),
+        )
+def plot_metric_group(
+    results: Dict[str, Dict[str, List[float]]],
+    metric_names: List[str],
+    title: str,
+    ylabel: str,
+    output_path: str,
+):
+    model_names = list(results.keys())
     num_models = len(model_names)
     num_metrics = len(metric_names)
 
-    # Compute mean scores
+    # Compute means: metric → model → value
     means = {
         metric: [
             sum(results[model][metric]) / len(results[model][metric])
@@ -192,28 +242,28 @@ def plot_results(results, output_path: str):
         for metric in metric_names
     }
 
-    x = range(num_models)
-    width = 0.8 / num_metrics  # keep bars nicely spaced
+    x = range(num_metrics)
+    width = 0.8 / num_models
 
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(12, 6))
 
-    for i, metric in enumerate(metric_names):
+    for i, model in enumerate(model_names):
         offsets = [xi + i * width for xi in x]
         plt.bar(
             offsets,
-            means[metric],
+            [means[m][i] for m in metric_names],
             width=width,
-            label=metric
+            label=model,
         )
 
     plt.xticks(
-        [xi + width * (num_metrics - 1) / 2 for xi in x],
-        model_names,
-        rotation=15
+        [xi + width * (num_models - 1) / 2 for xi in x],
+        metric_names,
+        rotation=15,
     )
 
-    plt.ylabel("Score")
-    plt.title("Playlist Generation Performance")
+    plt.ylabel(ylabel)
+    plt.title(title)
     plt.legend()
     plt.tight_layout()
     plt.savefig(output_path)
@@ -255,6 +305,8 @@ def main():
     playlists = load_playlists(args.playlist_json)
 
 
+    analyze_playlist_coverage(playlists, song_list)
+
     print("Tokenizing lyrics...")
     tokenizer = AutoTokenizer.from_pretrained("answerdotai/ModernBERT-base")
 
@@ -273,7 +325,29 @@ def main():
     models["songbert_p3"] = load_songbert(song_list, tokenized_lyrics, tokenizer, args.max_length, args.songbert_p3_dir, SongBertModelPhase3)
 
 
-    metrics = {m: METRIC_REGISTRY[m] for m in METRIC_REGISTRY}
+    metrics = {}
+
+    p1_embedding_metrics = EmbeddingPlaylistMetrics(models["songbert_p1"])
+    p3_embedding_metrics = EmbeddingPlaylistMetrics(models["songbert_p3"])
+
+    LEXICAL_METRICS = {
+        "precision@k",
+        "jaccard",
+    }
+
+    EMBEDDING_METRICS = {
+        "p1_centroid",
+        "p1_chamfer",
+        "p3_centroid",
+        "p3_chamfer",
+    }
+
+    metrics["precision@k"] = LexicalPlaylistMetrics.precision_at_k
+    metrics["jaccard"] = LexicalPlaylistMetrics.jaccard
+    metrics["p1_centroid"] = p1_embedding_metrics.centroid_distance
+    metrics["p1_chamfer"] = p1_embedding_metrics.chamfer_distance
+    metrics["p3_centroid"] = p3_embedding_metrics.centroid_distance
+    metrics["p3_chamfer"] = p3_embedding_metrics.chamfer_distance
 
     print("Evaluating...")
     results = evaluate(
@@ -289,7 +363,7 @@ def main():
             avg = sum(values) / len(values)
             print(f"{model_name:15s} {metric_name:12s}: {avg:.4f}")
 
-    plot_results(results, args.plot_out)
+    plot_results(results, args.plot_out, LEXICAL_METRICS, EMBEDDING_METRICS)
 
 
 if __name__ == "__main__":

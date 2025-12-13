@@ -29,13 +29,22 @@ class BertInferencer:
 
         self.tokenizer = tokenizer
         self.max_length = max_length
+
+        song_list = [s.lower().strip() for s in song_list]
+
         self.index_to_song = dict(enumerate(song_list))
+        self.song_to_index = {song:idx for idx, song in self.index_to_song.items()}
 
         cls_vectors = self.encode_tokenized(tokenized_lyrics)
         self.vector_matrix = F.normalize(cls_vectors, dim=1).cpu().numpy()
 
         self.nbrs = NearestNeighbors(metric="cosine", algorithm="brute")
         self.nbrs.fit(self.vector_matrix)
+
+        with torch.inference_mode():
+            unk_cls = self.get_cls_vector(self.tokenizer.unk_token)
+            unk_cls = F.normalize(unk_cls, dim=1)
+            self.unk_embedding = unk_cls.squeeze(0).cpu().numpy()
 
     def encode_tokenized(self, tokenized_batches):
         hidden = self.model.config.hidden_size
@@ -93,4 +102,14 @@ class BertInferencer:
         query = F.normalize(self.get_cls_vector(keywords), dim=1)
         _, indices = self.nbrs.kneighbors(query.cpu(), n_neighbors=k)
         return [self.index_to_song[i] for i in indices[0]]
+
+    def get_song_embedding(self, song_name: str):
+        song_name = song_name.lower().strip()
+        if song_name in self.song_to_index:
+            idx = self.song_to_index[song_name]
+            return self.vector_matrix[idx]
+        else:
+            # print("couldn't find lyrics for song:", song_name)
+            return self.unk_embedding
+
 
