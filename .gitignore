@@ -1,0 +1,7 @@
+wandb/
+data/
+__pycache__
+tokenized_lyrics.pt
+trained_models/
+figures/
+slurm-*.out
