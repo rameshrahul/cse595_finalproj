@@ -4,14 +4,7 @@ from transformers import AutoTokenizer, AutoModel
 import torch.nn.functional as F
 from tqdm import tqdm
 from sklearn.neighbors import NearestNeighbors
-
-
-import numpy as np
-import torch
-import torch.nn.functional as F
 from transformers import DataCollatorWithPadding
-from tqdm import tqdm
-from sklearn.neighbors import NearestNeighbors
 
 
 class BertInferencer:
@@ -109,7 +102,6 @@ class BertInferencer:
             idx = self.song_to_index[song_name]
             return self.vector_matrix[idx]
         else:
-            # print("couldn't find lyrics for song:", song_name)
             return self.unk_embedding
 
 

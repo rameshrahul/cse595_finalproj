@@ -14,14 +14,6 @@ import random
 
 class PlaylistDataset(Dataset):
     def __init__(self, adjacency_list, songid_to_tokenized_lyrics, max_length=512, num_context_songs=5, random_seed=42):
-        """
-        Args:
-            adjacency_list: Dict where keys are song lyrics and values are sets of 
-                           song lyrics that appear in the same playlist
-            tokenizer: Hugging Face tokenizer
-            max_length: Maximum sequence length for tokenization
-            num_context_songs: Number of context songs per target song
-        """
         self.data = []
         self.max_length = max_length
         self.songid_to_tokenized_lyrics = songid_to_tokenized_lyrics
@@ -29,17 +21,13 @@ class PlaylistDataset(Dataset):
         random.seed(random_seed)
         
         
-        # Get all songs for negative sampling
         all_songs = list(adjacency_list.keys())
         
-        # Create training examples
         for target_song, related_songs in tqdm(adjacency_list.items()):
             if len(related_songs) == 0:
                 continue
             
-            # Convert set to list for sampling
             positive_songs = list(related_songs)
-
             num_positive = min(len(positive_songs), num_context_songs // 2)
             num_negative = num_context_songs - num_positive
             
@@ -57,7 +45,6 @@ class PlaylistDataset(Dataset):
             )
             random.shuffle(context_songs)
             
-            # Create labels (1 if in same playlist, 0 otherwise)
             labels = [1.0 if song in related_songs else 0.0 for song in context_songs]
             
             self.data.append({
@@ -72,10 +59,7 @@ class PlaylistDataset(Dataset):
     def __getitem__(self, idx):
         item = self.data[idx]
         
-        # Tokenize target song
         target_tokens = self.songid_to_tokenized_lyrics[item['target']]    
-        
-        # Tokenize context songs
         context_tokens = [
             self.songid_to_tokenized_lyrics[song] 
             for song in item['context']
@@ -87,10 +71,6 @@ class PlaylistDataset(Dataset):
             'context_tokens': context_tokens,
             'labels': labels}
 
-
-# ============================================================================
-# DATA COLLATOR
-# ============================================================================
 
 class PlaylistDataCollator:
     def __call__(self, batch):

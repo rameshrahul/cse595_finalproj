@@ -19,10 +19,6 @@ from transformers import AutoTokenizer, AutoModel
 from safetensors.torch import load_file
 from transformers import DataCollatorWithPadding
 
-# ---------------------------------------------------------------------
-# Local imports
-# ---------------------------------------------------------------------
-
 from src.RandomBaselineInference import RandomBaseline
 from src.BertInference import BertInferencer
 from src.SongBertPhase3 import SongBertModelPhase3
@@ -30,10 +26,6 @@ from src.SongBertPhase1 import SongBertModelPhase1
 
 from src.Metrics import LexicalPlaylistMetrics, EmbeddingPlaylistMetrics
 
-
-# =====================================================================
-# Data Loading
-# =====================================================================
 
 def load_song_data(tsv_path: str) -> pd.DataFrame:
     df = pd.read_csv(
@@ -44,13 +36,8 @@ def load_song_data(tsv_path: str) -> pd.DataFrame:
         on_bad_lines="skip",
     )
 
-    # Ensure required columns exist
     df = df[["song", "lyrics"]]
-
-    # Drop rows with missing lyrics or song names
     df = df.dropna(subset=["song", "lyrics"])
-
-    # Force string type (VERY IMPORTANT)
     df["song"] = df["song"].astype(str)
     df["lyrics"] = df["lyrics"].astype(str)
 
@@ -87,52 +74,47 @@ def tokenize_lyrics(lyrics_list, tokenizer, max_length, batch_size=32):
 
     return all_batches
 
-def analyze_playlist_coverage(playlists, song_list):
-    """
-    Reports how many playlist tracks are missing from the lyric corpus.
-    """
-    song_set = {s.lower().strip() for s in song_list}
+# def analyze_playlist_coverage(playlists, song_list):
+#     """
+#     Reports how many playlist tracks are missing from the lyric corpus.
+#     """
+#     song_set = {s.lower().strip() for s in song_list}
 
-    total_tracks = 0
-    missing_tracks = 0
+#     total_tracks = 0
+#     missing_tracks = 0
 
-    missing_by_playlist = []
+#     missing_by_playlist = []
 
-    for playlist in playlists:
-        tracks = [t["track_name"] for t in playlist["tracks"]]
-        total_tracks += len(tracks)
+#     for playlist in playlists:
+#         tracks = [t["track_name"] for t in playlist["tracks"]]
+#         total_tracks += len(tracks)
 
-        missing = [
-            t for t in tracks
-            if t.lower().strip() not in song_set
-        ]
-        missing_tracks += len(missing)
+#         missing = [
+#             t for t in tracks
+#             if t.lower().strip() not in song_set
+#         ]
+#         missing_tracks += len(missing)
 
-        missing_by_playlist.append(len(missing))
+#         missing_by_playlist.append(len(missing))
 
-    print("\n=== PLAYLIST COVERAGE ANALYSIS ===")
-    print(f"Total playlist tracks: {total_tracks}")
-    print(f"Tracks missing lyrics: {missing_tracks}")
-    print(f"Coverage: {(1 - missing_tracks / max(total_tracks, 1)) * 100:.2f}%")
+#     print("\n=== PLAYLIST COVERAGE ANALYSIS ===")
+#     print(f"Total playlist tracks: {total_tracks}")
+#     print(f"Tracks missing lyrics: {missing_tracks}")
+#     print(f"Coverage: {(1 - missing_tracks / max(total_tracks, 1)) * 100:.2f}%")
 
-    # Optional diagnostics
-    if missing_by_playlist:
-        avg_missing = sum(missing_by_playlist) / len(missing_by_playlist)
-        max_missing = max(missing_by_playlist)
+#     if missing_by_playlist:
+#         avg_missing = sum(missing_by_playlist) / len(missing_by_playlist)
+#         max_missing = max(missing_by_playlist)
 
-        print(f"Avg missing tracks / playlist: {avg_missing:.2f}")
-        print(f"Max missing tracks in a playlist: {max_missing}")
+#         print(f"Avg missing tracks / playlist: {avg_missing:.2f}")
+#         print(f"Max missing tracks in a playlist: {max_missing}")
 
-    return {
-        "total_tracks": total_tracks,
-        "missing_tracks": missing_tracks,
-        "coverage_pct": (1 - missing_tracks / max(total_tracks, 1)) * 100,
-    }
+#     return {
+#         "total_tracks": total_tracks,
+#         "missing_tracks": missing_tracks,
+#         "coverage_pct": (1 - missing_tracks / max(total_tracks, 1)) * 100,
+#     }
 
-
-# =====================================================================
-# Model loading
-# =====================================================================
 
 
 def load_random_model(song_list, **kwargs):
@@ -163,9 +145,6 @@ def load_songbert(song_list, tokenized_lyrics, tokenizer, max_length, model_dir,
     return BertInferencer(song_list, tokenized_lyrics, model.bert, tokenizer, max_length)
 
 
-# =====================================================================
-# Evaluation
-# =====================================================================
 
 def evaluate(
     playlists,
@@ -195,9 +174,6 @@ def evaluate(
     return results
 
 
-# =====================================================================
-# Visualization
-# =====================================================================
 
 def plot_results(results, output_prefix: str, LEXICAL_METRICS, EMBEDDING_METRICS):
     all_metrics = list(next(iter(results.values())).keys())
@@ -283,7 +259,8 @@ def parse_args():
     parser.add_argument("--max-length", type=int, default=256)
     parser.add_argument("--sample-limit", type=int, default=1000)
     parser.add_argument("--songbert-p1-dir", default="trained_models/songbert_p1_10_epochs/final_model_phase1")
-    parser.add_argument("--songbert-p3-dir", default="trained_models/songbert_p3/final_model")
+    parser.add_argument("--songbert-p2-dir", default="trained_models/songbert_p2/final_model")
+    parser.add_argument("--songbert-final-dir", default="trained_models/songbert_p2/final_model")
     parser.add_argument("--plot-out", default="baseline_performance.png")
 
     return parser.parse_args()
@@ -305,7 +282,7 @@ def main():
     playlists = load_playlists(args.playlist_json)
 
 
-    analyze_playlist_coverage(playlists, song_list)
+    #analyze_playlist_coverage(playlists, song_list)
 
     print("Tokenizing lyrics...")
     tokenizer = AutoTokenizer.from_pretrained("answerdotai/ModernBERT-base")
@@ -322,32 +299,37 @@ def main():
     models["random"] = load_random_model(song_list)
     models["baseline bert"] = load_bert_baseline(song_list, tokenized_lyrics, tokenizer, args.max_length)
     models["songbert_p1"] = load_songbert(song_list, tokenized_lyrics, tokenizer, args.max_length, args.songbert_p1_dir, SongBertModelPhase1)
-    models["songbert_p3"] = load_songbert(song_list, tokenized_lyrics, tokenizer, args.max_length, args.songbert_p3_dir, SongBertModelPhase3)
+    models["songbert_p2"] = load_songbert(song_list, tokenized_lyrics, tokenizer, args.max_length, args.songbert_p2_dir, SongBertModelPhase3)
+    models["songbert_final"] = load_songbert(song_list, tokenized_lyrics, tokenizer, args.max_length, args.songbert_final_dir, SongBertModelPhase3)
 
+    # keywords = "gold chain bougie drink pregame pump going out rap"
+    # for model_name in models:
+    #     model = models[model_name]
+    #     print(model_name, model.generate_playlist(10, keywords))
+    # return
 
     metrics = {}
 
     p1_embedding_metrics = EmbeddingPlaylistMetrics(models["songbert_p1"])
-    p3_embedding_metrics = EmbeddingPlaylistMetrics(models["songbert_p3"])
+    p2_embedding_metrics = EmbeddingPlaylistMetrics(models["songbert_p2"])
+    final_embedding_metrics = EmbeddingPlaylistMetrics(models["songbert_final"])
 
     LEXICAL_METRICS = {
-        "precision@k",
+        "percentage_overlap",
         "jaccard",
     }
 
     EMBEDDING_METRICS = {
-        "p1_centroid",
         "p1_chamfer",
-        "p3_centroid",
-        "p3_chamfer",
+        "p2_chamfer",
+        "final_chamfer",
     }
 
-    metrics["precision@k"] = LexicalPlaylistMetrics.precision_at_k
+    metrics["percentage_overlap"] = LexicalPlaylistMetrics.percentage_overlap
     metrics["jaccard"] = LexicalPlaylistMetrics.jaccard
-    metrics["p1_centroid"] = p1_embedding_metrics.centroid_distance
     metrics["p1_chamfer"] = p1_embedding_metrics.chamfer_distance
-    metrics["p3_centroid"] = p3_embedding_metrics.centroid_distance
-    metrics["p3_chamfer"] = p3_embedding_metrics.chamfer_distance
+    metrics["p2_chamfer"] = p2_embedding_metrics.chamfer_distance
+    metrics["final_chamfer"] = final_embedding_metrics.chamfer_distance
 
     print("Evaluating...")
     results = evaluate(

@@ -6,19 +6,12 @@ import random
 
 class PlaylistDataset3(Dataset):
     def __init__(self, playlist_data, total_songs, tokenizer, songid_to_tokenized_lyrics, num_songs=5, num_samples=3, name_length=10):
-        """ Args:
-            adjacency_list: Dict where keys are song lyrics and values are sets of 
-                            song lyrics that appear in the same playlist
-            tokenizer: Hugging Face tokenizer
-            max_length: Maximum sequence length for tokenization
-            num_context_songs: Number of context songs per target song"""
 
         self.data = []
         self.tokenizer = tokenizer
         self.name_length = name_length
         self.songid_to_tokenized_lyrics = songid_to_tokenized_lyrics
 
-        # playlist data is [(playlist_name, [song_ids])]
         for playlist in playlist_data:
             name = playlist[0]
             pos_population = playlist[1] # -> 5 samples from just these
@@ -71,13 +64,6 @@ class PlaylistDataset3(Dataset):
                 songs.append(self.songid_to_tokenized_lyrics[song])
             context_tokens.append(songs)
 
-        
-        # Tokenize context songs
-        # context_tokens = [
-        #     self.songid_to_tokenized_lyrics[song] 
-        #     for song in item['context']
-        # ]
-        
         labels = torch.tensor(item['labels'], dtype=torch.float32)
         
         return {'target_tokens': target_tokens,

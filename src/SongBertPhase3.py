@@ -12,13 +12,6 @@ class SongBertModelPhase3(nn.Module):
 
         hidden_dim = bert_model.config.hidden_size
 
-        self.scorer = nn.Sequential(
-            nn.Linear(hidden_dim * 4, hidden_dim), #4: dot product, abs diff, og target vec, og context vec
-            # trying to learn the best way to compare two vectors
-            nn.ReLU(), # activation layer
-            nn.Linear(hidden_dim, 1)
-        )
-
         self.model_type = "songbert-phase3"
 
     # ----------------------------------------------------------------------
@@ -33,14 +26,11 @@ class SongBertModelPhase3(nn.Module):
         labels=None
     ):
 
-        # ---- Target embedding ----
         target_out = self.bert(
             input_ids=target_input_ids,
             attention_mask=target_attention_mask
         )
         cls_target = target_out.last_hidden_state[:, 0, :]
-
-        # ---- Context embedding ----
 
         # context was a list where each lyric is an element
         # context was list of lists, where each sublist was a songid
@@ -57,18 +47,11 @@ class SongBertModelPhase3(nn.Module):
         # reconstruct it
         cls_songs = cls_songs.view(B, Sa, So, -1)
 
-        # pool the songs to get
-        cls_sample = cls_songs.mean(dim=2)  
-
-        # ---- Combine features ----
-        x = torch.cat([
-            cls_target.unsqueeze(1).expand(-1, Sa, -1),
-            cls_sample,
-            torch.abs(cls_target.unsqueeze(1) - cls_sample),
-            cls_target.unsqueeze(1) * cls_sample
-        ], dim=-1)
-
-        logits = self.scorer(x).squeeze(-1)
+        cls_sample = cls_songs.mean(dim=2)
+        cls_target = F.normalize(cls_target, dim=-1)
+        cls_sample = F.normalize(cls_sample, dim=-1)
+        logits = torch.einsum("bd,bnd->bn", cls_target, cls_sample)
+  
 
         if labels is not None and self.loss_fn is not None:
             loss = self.loss_fn(logits, labels)

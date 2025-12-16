@@ -25,7 +25,10 @@ module load python
 module load cuda
 
 python evaluate_inference.py \
-    --songbert-p1-dir trained_models/songbert_p1_10_epochs/final_model_phase1 \
-    --songbert-p3-dir trained_models/songbert_p3
+    --songbert-p1-dir trained_models/songbert_p1_no_scorer/final_model \
+    --songbert-p2-dir trained_models/songbert_p3_comparison/final_model \
+    --songbert-final-dir trained_models/songbert_full/final_model \
+    --song-tsv data/chunk_data_4.tsv \
+    --playlist-json data/mpd.slice.4000-4999.json
 
 echo "evaluation script finished."
